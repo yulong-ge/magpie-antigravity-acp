@@ -4,6 +4,7 @@ Verified on 2026-11-08:
 
 - The official native `agy acp` executable completed ACP `initialize`, `session/new`, `session/set_config_option`, and `session/prompt` for `gemini-4-argon-medium`, returning `ACP_NATIVE_OK`.
 - `agy models` dynamically returned all 13 models available to the signed-in account, including Gemini, Claude, and GPT-OSS entries.
+- The authoritative model source is now the official ACP `session/new` response, not the separate `agy models` catalog. The native `agy 1.5.3 acp` session returned the same 13 models, including Claude and GPT-OSS.
 - The implementation has no T3 runtime, path, credential, or configuration dependency.
 - Public repository: https://github.com/yulong-ge/magpie-antigravity-acp
 - Magpie marketplace PR: https://github.com/magpie-community/plugins/pull/854 (open; marketplace visibility starts after upstream merge).
