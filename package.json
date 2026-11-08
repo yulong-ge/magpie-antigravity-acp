@@ -4,7 +4,8 @@
   "description": "Magpie provider backed by Google's official Antigravity ACP runtime",
   "type": "module",
   "license": "MIT",
-  "main": "./index.mjs",
+  "main": "./opencode.mjs",
+  "exports": { ".": "./opencode2.mjs" },
   "keywords": ["magpie-plugin", "opencode-plugin", "antigravity", "acp"],
   "magpie": {
     "name": "Antigravity Official ACP",
