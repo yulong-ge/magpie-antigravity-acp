@@ -8,9 +8,9 @@ Verified on 2026-11-08:
 - The implementation has no T3 runtime, path, credential, or configuration dependency.
 - Public repository: https://github.com/yulong-ge/magpie-antigravity-acp
 - Magpie marketplace PR: https://github.com/magpie-community/plugins/pull/854 (open; marketplace visibility starts after upstream merge).
-- Magpie installed the plugin and listed `antigravity-official-acp/gemini-4-argon-medium`.
+- Magpie installed the plugin and lists `antigravity-official-acp/gemini-4-argon` with `low`, `medium`, and `high` variants.
 - Magpie initially returned `502` because the plugin loader checked `auth.access`, while Magpie's API login provides `auth.key`. A second issue was that Magpie expects an SSE stream from an OpenAI-compatible provider plugin.
 - After both fixes, the same request through Magpie `/v1/chat/completions` returned `MAGPIE_ANTIGRAVITY_ACP_OK`.
 - A streaming request returned `MAGPIE_STREAM_OK` in `data:` chunks.
 
-The live Magpie acceptance now passes for `antigravity-official-acp/gemini-4-argon-medium`.
+- A live authenticated plugin check selected `gemini-4-argon-low`, `gemini-4-argon-medium`, and `gemini-4-argon-high` for the matching Magpie effort values, and each request returned the expected marker.
