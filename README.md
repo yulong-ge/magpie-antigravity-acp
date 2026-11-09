@@ -20,6 +20,12 @@ match the installation:
 - `MAGPIE_ANTIGRAVITY_HOME`: optional `GEMINI_HOME` directory used by `agy`.
 - `MAGPIE_ANTIGRAVITY_MODEL`: a logical ACP model ID, for example `gemini-4-argon`. Its `low`, `medium`, and `high` variants map to the exact model IDs advertised by the same ACP session.
 
+The plugin also implements Magpie's account usage hook. Magpie invokes the official
+`agy -p /usage --output-format json` command and shows each Antigravity quota
+bucket with its remaining percentage and reset time. The command uses the same
+`agy` installation and environment as ACP requests; configure the proxy in the
+Magpie process when Google access requires one.
+
 Install from the public repository:
 
 ```sh

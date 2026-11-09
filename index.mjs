@@ -34,6 +34,96 @@ function findRuntime() {
 
 function findBinary() { return findRuntime().bin }
 
+const USAGE_TIMEOUT_MS = 30_000
+const USAGE_SPANS = { "5h": 5 * 60 * 60, weekly: 7 * 24 * 60 * 60 }
+
+function usageError(message, cause) {
+  return { error: message, windows: [], signIn: "kept", ...(cause ? { cause } : {}) }
+}
+
+function parseUsagePayload(payload) {
+  const groups = payload?.command?.data?.groups
+  if (!Array.isArray(groups)) throw fail("Antigravity /usage returned no quota groups")
+  const windows = []
+  for (const group of groups) {
+    if (!group || typeof group.name !== "string" || !Array.isArray(group.buckets)) continue
+    for (const bucket of group.buckets) {
+      if (!bucket || typeof bucket.name !== "string") continue
+      const remaining = Number(bucket.remaining_fraction)
+      if (!Number.isFinite(remaining) || remaining < 0 || remaining > 1) {
+        throw fail(`Antigravity /usage returned invalid remaining_fraction for ${group.name}/${bucket.name}`)
+      }
+      const reset = typeof bucket.reset_time === "string" && !Number.isNaN(Date.parse(bucket.reset_time))
+        ? { resetsAt: new Date(bucket.reset_time).toISOString() }
+        : {}
+      const remainingPercent = Math.round(remaining * 100)
+      windows.push({
+        name: `${group.name} · ${bucket.name}`,
+        used: Math.round((1 - remaining) * 100),
+        remaining: remainingPercent,
+        display: `${remainingPercent}% remaining`,
+        ...(USAGE_SPANS[bucket.window] ? { span: USAGE_SPANS[bucket.window] } : {}),
+        ...reset,
+      })
+    }
+  }
+  if (!windows.length) throw fail("Antigravity /usage returned no quota buckets")
+  return { windows, signIn: "kept" }
+}
+
+function usageRuntime() {
+  const runtime = findRuntime()
+  if (!runtime.bin.endsWith("/agy") && !runtime.bin.endsWith("/agy.exe")) {
+    throw fail("Antigravity quota requires the official `agy` CLI executable")
+  }
+  return runtime
+}
+
+function readUsage() {
+  return new Promise((resolve, reject) => {
+    const runtime = usageRuntime()
+    const child = spawn(runtime.bin, ["-p", "/usage", "--output-format", "json", "--print-timeout", "30s"], {
+      cwd: process.cwd(),
+      env: { ...process.env, GEMINI_HOME: runtime.home, MAGPIE_ANTIGRAVITY_ACP: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let stdout = ""
+    let stderr = ""
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM")
+      reject(fail("Antigravity quota command timed out after 30 seconds"))
+    }, USAGE_TIMEOUT_MS)
+    child.stdout.setEncoding("utf8")
+    child.stderr.setEncoding("utf8")
+    child.stdout.on("data", (chunk) => { stdout += chunk })
+    child.stderr.on("data", (chunk) => { stderr += chunk })
+    child.on("error", (error) => {
+      clearTimeout(timer)
+      reject(fail("failed to start Antigravity quota command", error))
+    })
+    child.on("close", (code, signal) => {
+      clearTimeout(timer)
+      if (code !== 0) {
+        reject(fail(`Antigravity quota command failed (code=${code}, signal=${signal}): ${stderr.trim() || "no diagnostic output"}`))
+        return
+      }
+      try {
+        resolve(JSON.parse(stdout))
+      } catch (error) {
+        reject(fail(`Antigravity quota command returned invalid JSON: ${stdout.trim().slice(0, 200)}`, error))
+      }
+    })
+  })
+}
+
+async function usage() {
+  try {
+    return parseUsagePayload(await readUsage())
+  } catch (error) {
+    return usageError(`Antigravity quota read failed: ${error?.message ?? error}`)
+  }
+}
+
 const MODEL_SUFFIXES = new Set(["minimal", "low", "medium", "high", "xhigh", "max", "none"])
 
 function model(id = DEFAULT_MODEL, name = id, efforts = []) {
@@ -205,7 +295,12 @@ export async function AntigravityAcpPlugin() {
         const auth = await getAuth()
         if (!(auth?.type === "api" && auth.key) && auth?.type !== "oauth") return {}
         return { baseURL: "http://antigravity-acp.invalid/v1", apiKey: "official-acp", async fetch(input, init = {}) { const request = bodyOf(input, init); const completion = await generate(request, init.signal); return new Response(streamOf(completion), { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" } }) } }
-      }
+      },
+      async usage(getAuth) {
+        const auth = await getAuth()
+        if (!(auth?.type === "api" && auth.key) && auth?.type !== "oauth") return usageError("Antigravity is not signed in")
+        return usage()
+      },
     },
     async config(config) {
       config.provider ??= {}
@@ -222,4 +317,4 @@ export async function AntigravityAcpPlugin() {
   }
 }
 
-export const _internal = { findBinary, findRuntime, discoverModels, promptOf, model, generate, wireModel }
+export const _internal = { findBinary, findRuntime, discoverModels, promptOf, model, generate, wireModel, parseUsagePayload, readUsage, usage }
